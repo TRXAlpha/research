@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "affective-metacontrol"
+version = "0.1.0"
+description = "Research scaffold for endogenous affective metacontrol in language-model agents"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Research project contributors" }]
+dependencies = []
+
+[project.optional-dependencies]
+mvp = [
+  "torch>=2.5",
+  "transformers>=4.45",
+  "accelerate>=1.0",
+  "safetensors>=0.4",
+  "sentencepiece>=0.2",
+]
+
+[project.scripts]
+affective-metacontrol = "affective_metacontrol.cli:main"
+affective-mvp = "affective_metacontrol.mvp:main"
+affective-neural-benchmark = "affective_metacontrol.neural_benchmark:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

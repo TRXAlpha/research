@@ -1,5 +1,7 @@
 # Endogenous Affective Metacontrol
 
+[Versiune în limba română](README-RO.md)
+
 Research code and protocol for testing whether an autonomous affective substrate can causally reorganize cognition in language-model agents.
 
 The project does **not** claim that an artificial system feels, is conscious, or has biological neurotransmitters. It tests a narrower computational hypothesis:

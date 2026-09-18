@@ -82,4 +82,12 @@ def neural_coordinates(state: AffectState) -> NeuralAffectCoordinates:
         valence=(s.valence + 0.30 * s.mood_valence - 0.40 * s.stress - 0.28 * s.frustration),
         arousal=(s.arousal - 0.20 + 0.35 * s.stress + 0.22 * s.frustration - 0.35 * s.fatigue),
         dominance=(s.dominance - 0.38 * s.stress + 0.12 * s.frustration - 0.25 * s.fatigue),
+        # Primitive defensive alarm: high stress/arousal plus low perceived control.
+        # It is zero at the neutral baseline and cannot be selected by the agent.
+        alarm=(
+            0.60 * s.stress
+            + 0.35 * max(0.0, s.arousal - 0.20)
+            + 0.25 * max(0.0, -s.dominance)
+            + 0.15 * s.frustration
+        ),
     ).bounded()

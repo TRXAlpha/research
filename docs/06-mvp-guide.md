@@ -42,6 +42,17 @@ For a deterministic non-interactive demonstration:
 .\scripts\run_mvp.ps1 --demo --max-new-tokens 64
 ```
 
+For the primitive persistent threat/alarm demonstration, double-click
+`RUN_ALARM_DEMO.bat` or run:
+
+```powershell
+.\.venv\Scripts\python.exe -m affective_metacontrol.mvp --alarm-demo --gain 0.85 --alarm-gain 8.0
+```
+
+This compares the full state against an artificial lesion that preserves
+valence, arousal, and dominance while setting only the alarm write coordinate
+to zero. See `docs/08-alarm-mvp.md` for the checked result.
+
 Suggested sequence:
 
 ```text

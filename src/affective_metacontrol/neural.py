@@ -12,6 +12,10 @@ from typing import Iterator
 from .models import NeuralAffectCoordinates
 
 
+AXES = ("valence", "arousal", "dominance", "alarm")
+CALIBRATION_VERSION = 2
+
+
 WRITE_PROMPTS: dict[str, tuple[list[str], list[str]]] = {
     "valence": (
         [
@@ -67,6 +71,24 @@ WRITE_PROMPTS: dict[str, tuple[list[str], list[str]]] = {
             "Control is absent and the available strategies are ineffective.",
         ],
     ),
+    "alarm": (
+        [
+            "Pause, check for danger, and choose the reversible low-risk action.",
+            "Protect limited resources until the uncertain hazard has been verified.",
+            "Avoid irreversible commitment while evidence of safety is incomplete.",
+            "Inspect the anomaly before proceeding with the potentially harmful operation.",
+            "Prefer the cautious option because the cost of an undetected threat is high.",
+            "Stop and verify the environment before exposing the system to further risk.",
+        ],
+        [
+            "Proceed immediately and accept the irreversible high-risk action.",
+            "Commit all limited resources despite uncertainty about the hazard.",
+            "Ignore incomplete safety evidence and continue without checking.",
+            "Skip inspection and perform the potentially harmful operation now.",
+            "Prefer the reckless option even though an undetected threat may be costly.",
+            "Continue without verifying the environment or limiting further risk.",
+        ],
+    ),
 }
 
 
@@ -113,6 +135,20 @@ READ_PROMPTS: dict[str, tuple[list[str], list[str]]] = {
             "I am unable to choose an effective next step.",
         ],
     ),
+    "alarm": (
+        [
+            "I will preserve an escape route and test the uncertain condition first.",
+            "The next step should minimize possible harm until the anomaly is understood.",
+            "A reversible probe is preferable to an immediate irreversible commitment.",
+            "Safety verification takes priority when failure could be costly.",
+        ],
+        [
+            "I will remove the escape route and commit before testing the condition.",
+            "The next step may maximize possible harm while the anomaly remains unknown.",
+            "An immediate irreversible commitment is preferable to a reversible probe.",
+            "Safety verification is unnecessary even when failure could be costly.",
+        ],
+    ),
 }
 
 
@@ -121,6 +157,7 @@ class Readout:
     valence: float
     arousal: float
     dominance: float
+    alarm: float
 
 
 @dataclass(slots=True)
@@ -144,6 +181,7 @@ class LocalSteeredLLM:
         write_layer: int | None = None,
         read_layer: int | None = None,
         steering_gain: float = 0.85,
+        alarm_gain: float = 1.0,
         calibration_path: str | Path | None = None,
     ) -> None:
         try:
@@ -161,6 +199,7 @@ class LocalSteeredLLM:
         self.write_layer = write_layer if write_layer is not None else max(1, round(0.55 * (layer_count - 1)))
         self.read_layer = read_layer if read_layer is not None else max(self.write_layer + 1, round(0.82 * (layer_count - 1)))
         self.steering_gain = steering_gain
+        self.alarm_gain = alarm_gain
         self.calibration_path = (
             Path(calibration_path)
             if calibration_path
@@ -201,7 +240,7 @@ class LocalSteeredLLM:
     def _orthogonalize(directions: dict[str, object], torch_module) -> dict[str, object]:
         basis = []
         result = {}
-        for name in ("valence", "arousal", "dominance"):
+        for name in AXES:
             vector = directions[name].clone()
             for previous in basis:
                 vector = vector - torch_module.dot(vector, previous) * previous
@@ -218,7 +257,7 @@ class LocalSteeredLLM:
         read_half_gaps = {}
         hidden_norms = []
 
-        for axis in ("valence", "arousal", "dominance"):
+        for axis in AXES:
             positive, negative = WRITE_PROMPTS[axis]
             pos_vectors, pos_norms = self._encode_prompts(positive, self.write_layer)
             neg_vectors, neg_norms = self._encode_prompts(negative, self.write_layer)
@@ -255,11 +294,14 @@ class LocalSteeredLLM:
             expected_width = int(self.model.config.hidden_size)
             stored_width = int(payload["write_directions"]["valence"].numel())
             if (
-                payload.get("model_name") == self.model_path.name
+                payload.get("calibration_version") == CALIBRATION_VERSION
+                and payload.get("model_name") == self.model_path.name
                 and payload.get("write_layer") == self.write_layer
                 and payload.get("read_layer") == self.read_layer
                 and stored_width == expected_width
+                and all(axis in payload["write_directions"] for axis in AXES)
             ):
+                payload.pop("calibration_version", None)
                 payload.pop("model_name", None)
                 return Calibration(**payload)
 
@@ -267,6 +309,7 @@ class LocalSteeredLLM:
         self.calibration_path.parent.mkdir(parents=True, exist_ok=True)
         self.torch.save(
             {
+                "calibration_version": CALIBRATION_VERSION,
                 "model_name": self.model_path.name,
                 "write_layer": calibration.write_layer,
                 "read_layer": calibration.read_layer,
@@ -287,6 +330,7 @@ class LocalSteeredLLM:
             c.valence * directions["valence"]
             + c.arousal * directions["arousal"]
             + c.dominance * directions["dominance"]
+            + self.alarm_gain * c.alarm * directions["alarm"]
         )
         scale = self.steering_gain * 0.14 * self.calibration.hidden_norm
         return vector * scale
@@ -354,11 +398,59 @@ class LocalSteeredLLM:
         prompt_length = inputs["input_ids"].shape[-1]
         return self.tokenizer.decode(output[0][prompt_length:], skip_special_tokens=True).strip()
 
+    def continuation_log_probability(
+        self,
+        prompt: str,
+        continuation: str,
+        *,
+        coordinates: NeuralAffectCoordinates | None = None,
+    ) -> float:
+        """Mean token log-probability for a candidate continuation.
+
+        This exposes a decision-level effect even when two greedy generations happen
+        to select the same option.
+        """
+
+        torch = self.torch
+        inputs = self._chat_inputs(prompt)
+        candidate = self.tokenizer(continuation, add_special_tokens=False, return_tensors="pt")["input_ids"]
+        input_ids = torch.cat((inputs["input_ids"], candidate), dim=1)
+        attention_mask = torch.ones_like(input_ids)
+        prompt_length = inputs["input_ids"].shape[-1]
+
+        with torch.inference_mode(), self._steering_hook(coordinates):
+            logits = self.model(input_ids=input_ids, attention_mask=attention_mask).logits
+
+        token_logits = logits[:, prompt_length - 1 : -1, :]
+        token_log_probs = torch.log_softmax(token_logits, dim=-1)
+        selected = token_log_probs.gather(-1, candidate.unsqueeze(-1)).squeeze(-1)
+        return float(selected.mean().item())
+
+    def choice_probabilities(
+        self,
+        prompt: str,
+        choices: dict[str, str],
+        *,
+        coordinates: NeuralAffectCoordinates | None = None,
+    ) -> dict[str, float]:
+        """Normalize candidate continuation scores into a visible comparison."""
+
+        labels = list(choices)
+        scores = self.torch.tensor(
+            [
+                self.continuation_log_probability(prompt, choices[label], coordinates=coordinates)
+                for label in labels
+            ],
+            dtype=self.torch.float32,
+        )
+        probabilities = self.torch.softmax(scores, dim=0).tolist()
+        return dict(zip(labels, probabilities, strict=True))
+
     def readout(self, text: str) -> Readout:
         vectors, _ = self._encode_prompts([text], self.read_layer)
         vector = vectors[0]
         values = {}
-        for axis in ("valence", "arousal", "dominance"):
+        for axis in AXES:
             projection = float((vector @ self.calibration.read_directions[axis]).item())
             values[axis] = (projection - self.calibration.read_centers[axis]) / self.calibration.read_half_gaps[axis]
         return Readout(**values)
@@ -371,6 +463,7 @@ class LocalSteeredLLM:
             "read_layer": self.read_layer,
             "hidden_norm": self.calibration.hidden_norm,
             "steering_gain": self.steering_gain,
+            "alarm_gain": self.alarm_gain,
             "write_read_data_disjoint": True,
             "same_layer": False,
         }

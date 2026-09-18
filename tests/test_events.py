@@ -25,8 +25,12 @@ class EventAndCoordinateTests(unittest.TestCase):
         self.assertLess(coordinates.valence, 0.0)
         self.assertGreater(coordinates.arousal, 0.0)
         self.assertLess(coordinates.dominance, 0.0)
+        self.assertGreater(coordinates.alarm, 0.0)
+
+    def test_neutral_state_has_no_alarm(self) -> None:
+        coordinates = neural_coordinates(AffectState())
+        self.assertEqual(coordinates.alarm, 0.0)
 
 
 if __name__ == "__main__":
     unittest.main()
-

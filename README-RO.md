@@ -73,6 +73,7 @@ Nu demonstrează încă:
 - `docs/05-brief-profesor-ro.md` — material în română pentru coordonatorul de neuroștiințe.
 - `docs/06-mvp-guide.md` — instalare și testare interactivă.
 - `docs/07-mvp-results.md` — rezultatele verificate și limitele MVP-ului.
+- `docs/08-alarm-mvp.md` — intervenția minimală de alarmă și comparația prin „leziune” artificială.
 - `ROADMAP.md` — planul de implementare în etape.
 - `literature/prior-art.csv` — tabel structurat al literaturii.
 - `src/affective_metacontrol/` — implementarea executabilă.
@@ -101,6 +102,14 @@ Benchmark neuronal:
 ```powershell
 .\scripts\run_neural_benchmark.ps1
 ```
+
+Demonstrația emoției minimale de alarmă/amenințare:
+
+```powershell
+.\.venv\Scripts\python.exe -m affective_metacontrol.mvp --alarm-demo --gain 0.85 --alarm-gain 8.0
+```
+
+Pe Windows poate fi deschis direct `RUN_ALARM_DEMO.bat`. Demonstrația aplică două evenimente de amenințare, măsoară preferința modelului pentru acțiuni prudente și compară starea completă cu o „leziune” artificială în care numai canalul neuronal de alarmă este eliminat.
 
 Teste automate:
 

@@ -106,10 +106,12 @@ class NeuralAffectCoordinates:
     valence: float
     arousal: float
     dominance: float
+    alarm: float
 
     def bounded(self, limit: float = 1.5) -> "NeuralAffectCoordinates":
         return NeuralAffectCoordinates(
             valence=clamp(self.valence, -limit, limit),
             arousal=clamp(self.arousal, -limit, limit),
             dominance=clamp(self.dominance, -limit, limit),
+            alarm=clamp(self.alarm, 0.0, limit),
         )

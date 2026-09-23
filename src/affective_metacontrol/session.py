@@ -26,6 +26,7 @@ class Comparison:
     coordinates: NeuralAffectCoordinates
     baseline_readout: object
     affective_readout: object
+    steering_stats: dict[str, object] | None = None
 
 
 class AffectiveSession:
@@ -60,6 +61,8 @@ class AffectiveSession:
             max_new_tokens=max_new_tokens,
             seed=seed,
         )
+        stats_fn = getattr(self.backend, "steering_stats", None)
+        steering_stats = stats_fn(self.coordinates) if callable(stats_fn) else None
         comparison = Comparison(
             prompt=prompt,
             baseline=baseline,
@@ -67,6 +70,7 @@ class AffectiveSession:
             coordinates=self.coordinates,
             baseline_readout=self.backend.readout(baseline),
             affective_readout=self.backend.readout(affective),
+            steering_stats=steering_stats,
         )
         self._log(
             {

@@ -41,7 +41,7 @@
 
 - Procedurally generate held-out scientific micro-worlds.
 - Evaluate memory, causal discovery, flexible strategy switching, calibration, and creative search.
-- Include benefits and impairments across an affect-intensity dose curve.
+- [x] Include benefits and impairments across an affect-intensity dose curve (implemented dose-response protocol, representation collapse analysis, and norm bounding; see `docs/09-dose-response-and-norm-limiting.md`).
 - Run artificial-lesion and state-clamping interventions.
 - Compare against a capacity- and compute-matched generic recurrent controller.
 - Use at least five development seeds and a separately locked confirmatory seed set.

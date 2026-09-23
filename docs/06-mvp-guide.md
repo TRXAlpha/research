@@ -89,14 +89,32 @@ The affective agent's correct or incorrect answer automatically generates the ne
 
 The checked MVP run is summarized in `docs/07-mvp-results.md`.
 
-## Strength adjustment
+## Strength adjustment and norm limiting
 
 ```powershell
 .\scripts\run_mvp.ps1 --gain 0.5
-.\scripts\run_mvp.ps1 --gain 1.1
+.\scripts\run_mvp.ps1 --gain 0.85 --alarm-gain 2.5
 ```
 
-Very high gains may reduce coherence. That failure is an expected boundary condition and must not be hidden.
+By default, an intervention norm limit is enabled (`--max-norm-ratio 0.30`) to bound the injected activation vector to a safe fraction of the layer's unperturbed norm ($r_{\text{limitat}} = r \cdot \min(1, r_{\max} / \|r\|)$).
+
+To observe the unconstrained boundary condition (where extreme affective gain overwrites representations and induces degenerative repetition loops), pass:
+
+```powershell
+.\scripts\run_mvp.ps1 --gain 0.85 --alarm-gain 8.0 --no-norm-limit
+```
+
+## Automated dose-response study
+
+To systematically map threat accumulation, norm bounding, risk preference, and post-threat recovery:
+
+```powershell
+.\RUN_DOSE_RESPONSE.bat
+# or from PowerShell:
+.\.venv\Scripts\python.exe -m affective_metacontrol.dose_response --gain 0.65 --alarm-gain 2.5 --compare-unbounded
+```
+
+See `docs/09-dose-response-and-norm-limiting.md` for full results and mathematical analysis.
 
 ## Current methodological limitations
 

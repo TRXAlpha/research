@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from statistics import fmean
 
+from .metrics import evaluate_text_quality
 from .models import NeuralAffectCoordinates
 from .neural import LocalSteeredLLM
 from .session import AffectiveSession, available_events
@@ -21,6 +22,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL)
     parser.add_argument("--gain", type=float, default=0.85, help="Neural intervention strength")
     parser.add_argument("--alarm-gain", type=float, default=1.0, help="Additional gain for the alarm axis")
+    parser.add_argument(
+        "--max-norm-ratio",
+        type=float,
+        default=0.30,
+        help="Intervention norm limit as fraction of hidden activation norm (default: 0.30)",
+    )
+    parser.add_argument(
+        "--no-norm-limit",
+        action="store_true",
+        help="Disable intervention norm limiting (can cause representation collapse at high gains)",
+    )
     parser.add_argument("--max-new-tokens", type=int, default=96)
     parser.add_argument("--log", type=Path, default=Path("runs/mvp-session.jsonl"))
     parser.add_argument("--demo", action="store_true", help="Run one deterministic non-interactive demonstration")
@@ -49,6 +61,14 @@ def show_comparison(comparison) -> None:
     print("\n--- AFFECTIVE (hidden-state intervention) ---")
     print(comparison.affective)
     print("\nNeural write coordinates:", json.dumps(asdict(comparison.coordinates), indent=2))
+    if comparison.steering_stats:
+        print("Steering vector stats:", json.dumps(comparison.steering_stats, indent=2))
+    quality = evaluate_text_quality(comparison.affective)
+    print(
+        f"Linguistic quality: distinct-1={quality.distinct_1:.2f}, "
+        f"distinct-2={quality.distinct_2:.2f}, rep-3={quality.repetition_rate_3:.2f}, "
+        f"loop_detected={quality.is_degenerate_loop}"
+    )
     print("Independent readout, baseline:", json.dumps(asdict(comparison.baseline_readout), indent=2))
     print("Independent readout, affective:", json.dumps(asdict(comparison.affective_readout), indent=2))
 
@@ -164,7 +184,13 @@ def main() -> None:
         raise SystemExit(f"Model not found at {args.model}. Run scripts/setup_mvp.ps1 first.")
 
     print("Loading frozen local model and neural calibration...")
-    backend = LocalSteeredLLM(args.model, steering_gain=args.gain, alarm_gain=args.alarm_gain)
+    norm_ratio = None if args.no_norm_limit else args.max_norm_ratio
+    backend = LocalSteeredLLM(
+        args.model,
+        steering_gain=args.gain,
+        alarm_gain=args.alarm_gain,
+        max_norm_ratio=norm_ratio,
+    )
     backend.save_report("artifacts/calibration-report.json")
     session = AffectiveSession(backend, log_path=args.log)
 

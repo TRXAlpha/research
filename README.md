@@ -28,6 +28,7 @@ The project does **not** claim that an artificial system feels, is conscious, or
 - `docs/06-mvp-guide.md` — setup and interactive testing.
 - `docs/07-mvp-results.md` — checked proof-of-concept results and limitations.
 - `docs/08-alarm-mvp.md` — primitive threat/alarm intervention and artificial-lesion result.
+- `docs/09-dose-response-and-norm-limiting.md` — representation collapse analysis, intervention norm limiting, and dose-response curve.
 - `ROADMAP.md` — staged implementation plan.
 - `literature/prior-art.csv` — structured living evidence table.
 - `src/affective_metacontrol/` — executable reference implementation.
@@ -42,6 +43,8 @@ The first 100-episode plumbing run yields equal perfect end accuracy across all 
 
 The primitive alarm MVP adds a dedicated defensive neural write channel. In the checked four-task demonstration, the full alarm state increased mean cautious-action preference by 16.4 percentage points relative to an artificial lesion that preserved all other affect coordinates. This is a visible causal demonstration, not a powered scientific result.
 
+Intervention norm limiting ($r_{\text{limitat}} = r \cdot \min(1, r_{\max} / \|r\|)$) prevents activation overwriting and representation collapse under high alarm gains, preserving fluent language generation while maintaining defensive decision bias across parametric dose-response schedules.
+
 For the neural proof of concept, see `docs/06-mvp-guide.md` and run `scripts/run_mvp.ps1`.
 
 Fast checked demonstration:
@@ -55,6 +58,7 @@ On Windows you can also double-click:
 - `RUN_MVP.bat` for the interactive comparison;
 - `RUN_DEMO.bat` for a deterministic demonstration;
 - `RUN_ALARM_DEMO.bat` for the primitive threat/alarm intervention and artificial-lesion comparison;
+- `RUN_DOSE_RESPONSE.bat` for the automated dose-response and recovery comparison study;
 - `RUN_BENCHMARK.bat` for the eight-task closed-loop smoke benchmark.
 
 ## Run locally

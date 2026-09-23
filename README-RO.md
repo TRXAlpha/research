@@ -38,7 +38,9 @@ Componentele principale sunt:
 - `events.py` definește evenimente precum succes, eșec controlabil, eșec necontrolabil, amenințare, conflict, descoperire și odihnă. Evenimentele nu sunt etichete emoționale.
 - `affect.py` aplică automat ecuațiile de tranziție. Agentul nu are o comandă de tipul „activează frica”.
 - `modulation.py` transformă starea afectivă în predicții despre atenție, memorie, explorare, verificare, creativitate și eficiență. Include efecte neliniare, de exemplu curba în U inversat pentru activare.
-- `neural.py` calibrează direcții neuronale de scriere și citire într-un LLM local înghețat și aplică intervenția printr-un hook într-un strat Transformer.
+- `neural.py` calibrează direcții neuronale de scriere și citire într-un LLM local înghețat, aplică intervenția printr-un hook într-un strat Transformer și limitează norma intervenției ($r_{\text{limitat}} = r \cdot \min(1, r_{\max} / \|r\|)$) pentru a preveni colapsul reprezentărilor lingvistice.
+- `metrics.py` calculează calitatea lingvistică: rata de repetiție a n-gramelor, diversitatea lexicală (TTR, Distinct-1, Distinct-2, entropie), detectarea buclelor degenerate și dinamica de recuperare după odihnă (`rest`).
+- `dose_response.py` rulează protocolul automatizat în trepte (Baseline → 4× threat → 3× rest) pentru a măsura curba doză–răspuns și a compara regimul limitat cu cel nelimitat.
 - `session.py` păstrează starea între interacțiuni, compară răspunsul de bază cu cel afectiv și salvează istoricul.
 - `mvp.py` oferă interfața interactivă.
 - `neural_benchmark.py` rulează un test în buclă închisă: rezultatul unei probleme generează automat evenimentul care afectează problema următoare.
@@ -74,7 +76,9 @@ Nu demonstrează încă:
 - `docs/06-mvp-guide.md` — instalare și testare interactivă.
 - `docs/07-mvp-results.md` — rezultatele verificate și limitele MVP-ului.
 - `docs/08-alarm-mvp.md` — intervenția minimală de alarmă și comparația prin „leziune” artificială.
+- `docs/09-dose-response-and-norm-limiting.md` — analiza colapsului neuronal, limitarea matematică a normei și curba doză–răspuns.
 - `ROADMAP.md` — planul de implementare în etape.
+- `RUN_DOSE_RESPONSE.bat` — lansare rapidă a benchmarkului doză–răspuns comparativ.
 - `literature/prior-art.csv` — tabel structurat al literaturii.
 - `src/affective_metacontrol/` — implementarea executabilă.
 - `tests/` — teste de invariante și reproductibilitate.

@@ -182,6 +182,8 @@ class LocalSteeredLLM:
         read_layer: int | None = None,
         steering_gain: float = 0.85,
         alarm_gain: float = 1.0,
+        max_norm: float | None = None,
+        max_norm_ratio: float | None = 0.30,
         calibration_path: str | Path | None = None,
     ) -> None:
         try:
@@ -200,6 +202,8 @@ class LocalSteeredLLM:
         self.read_layer = read_layer if read_layer is not None else max(self.write_layer + 1, round(0.82 * (layer_count - 1)))
         self.steering_gain = steering_gain
         self.alarm_gain = alarm_gain
+        self.max_norm = max_norm
+        self.max_norm_ratio = max_norm_ratio
         self.calibration_path = (
             Path(calibration_path)
             if calibration_path
@@ -323,6 +327,13 @@ class LocalSteeredLLM:
         )
         return calibration
 
+    def effective_max_norm(self) -> float | None:
+        if self.max_norm is not None:
+            return float(self.max_norm)
+        if self.max_norm_ratio is not None:
+            return float(self.max_norm_ratio * self.calibration.hidden_norm)
+        return None
+
     def steering_vector(self, coordinates: NeuralAffectCoordinates):
         c = coordinates.bounded()
         directions = self.calibration.write_directions
@@ -333,7 +344,42 @@ class LocalSteeredLLM:
             + self.alarm_gain * c.alarm * directions["alarm"]
         )
         scale = self.steering_gain * 0.14 * self.calibration.hidden_norm
-        return vector * scale
+        r = vector * scale
+        max_r = self.effective_max_norm()
+        if max_r is not None and max_r > 0:
+            norm = float(r.norm().item())
+            if norm > 0:
+                factor = min(1.0, max_r / norm)
+                r = r * factor
+        return r
+
+    def steering_stats(self, coordinates: NeuralAffectCoordinates) -> dict[str, float | bool]:
+        c = coordinates.bounded()
+        directions = self.calibration.write_directions
+        vector = (
+            c.valence * directions["valence"]
+            + c.arousal * directions["arousal"]
+            + c.dominance * directions["dominance"]
+            + self.alarm_gain * c.alarm * directions["alarm"]
+        )
+        scale = self.steering_gain * 0.14 * self.calibration.hidden_norm
+        raw_r = vector * scale
+        raw_norm = float(raw_r.norm().item())
+        max_r = self.effective_max_norm()
+        if max_r is not None and max_r > 0 and raw_norm > 0:
+            factor = min(1.0, max_r / raw_norm)
+            clamped_norm = raw_norm * factor
+            clamped = factor < 1.0
+        else:
+            clamped_norm = raw_norm
+            clamped = False
+        return {
+            "raw_norm": raw_norm,
+            "effective_norm": clamped_norm,
+            "max_norm": max_r if max_r is not None else float("inf"),
+            "norm_ratio_to_hidden": clamped_norm / self.calibration.hidden_norm,
+            "is_clamped": clamped,
+        }
 
     @contextmanager
     def _steering_hook(self, coordinates: NeuralAffectCoordinates | None) -> Iterator[None]:
@@ -455,6 +501,26 @@ class LocalSteeredLLM:
             values[axis] = (projection - self.calibration.read_centers[axis]) / self.calibration.read_half_gaps[axis]
         return Readout(**values)
 
+    def text_log_probability(self, text: str) -> float:
+        """Mean token log-probability of text under the unperturbed base model.
+
+        Degenerate repetitive text and out-of-distribution strings exhibit
+        abnormal perplexity and log-likelihood drops.
+        """
+        if not text.strip():
+            return 0.0
+        torch = self.torch
+        tokens = self.tokenizer(text, return_tensors="pt")["input_ids"]
+        if tokens.shape[-1] < 2:
+            return 0.0
+        with torch.inference_mode():
+            logits = self.model(input_ids=tokens).logits
+        shift_logits = logits[:, :-1, :]
+        shift_labels = tokens[:, 1:]
+        log_probs = torch.log_softmax(shift_logits, dim=-1)
+        selected = log_probs.gather(-1, shift_labels.unsqueeze(-1)).squeeze(-1)
+        return float(selected.mean().item())
+
     def calibration_report(self) -> dict[str, object]:
         return {
             "model": str(self.model_path),
@@ -464,6 +530,9 @@ class LocalSteeredLLM:
             "hidden_norm": self.calibration.hidden_norm,
             "steering_gain": self.steering_gain,
             "alarm_gain": self.alarm_gain,
+            "max_norm": self.max_norm,
+            "max_norm_ratio": self.max_norm_ratio,
+            "effective_max_norm": self.effective_max_norm(),
             "write_read_data_disjoint": True,
             "same_layer": False,
         }
